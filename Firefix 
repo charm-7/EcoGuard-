@@ -1,0 +1,325 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+// Assuming Tailwind CSS is available globally via CDN (as per instructions)
+
+// --- FIREBASE CONFIGURATION & INITIALIZATION (MANDATORY) ---
+
+// Global variables provided by the Canvas environment
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+let app, auth, db;
+if (firebaseConfig) {
+    try {
+        app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+    } catch (e) {
+        console.error("Firebase Initialization Error:", e);
+    }
+} else {
+    console.warn("Firebase configuration not found. Running in local mode without full authentication.");
+}
+
+// --- GEMINI API CONFIGURATION ---
+const MODEL_NAME = "gemini-2.5-flash-preview-05-20";
+const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent`;
+const API_KEY = ""; // Placeholder, key is injected by the environment
+
+// Define the mandatory JSON structure for the AI output
+const DIAGNOSIS_SCHEMA = {
+    type: "OBJECT",
+    properties: {
+        Diagnosis: { type: "STRING" },
+        TreatmentPlan: { type: "STRING" },
+        EducationalContent: { type: "STRING" },
+        SafetyAndPrevention: { type: "STRING" },
+    },
+    required: ["Diagnosis", "TreatmentPlan", "EducationalContent", "SafetyAndPrevention"]
+};
+
+// --- UTILITY COMPONENTS ---
+
+const LoadingSpinner = () => (
+    <div className="flex justify-center items-center py-6">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
+        <p className="ml-3 text-gray-600">Analyzing symptoms...</p>
+    </div>
+);
+
+const SectionCard = ({ title, content, colorClass }) => (
+    <div className={`p-6 border-l-4 ${colorClass} bg-white shadow-lg rounded-lg transition-all duration-300 hover:shadow-xl`}>
+        <h3 className="text-xl font-bold mb-3 text-gray-800 flex items-center">
+            {title}
+        </h3>
+        <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">{content}</div>
+    </div>
+);
+
+const GroundingSources = ({ sources }) => {
+    if (!sources || sources.length === 0) return null;
+    return (
+        <div className="mt-6 p-4 bg-gray-50 border-t border-gray-200 rounded-b-xl">
+            <p className="text-sm font-semibold text-gray-600 mb-2">Sources Grounded by Google Search:</p>
+            <ul className="list-disc list-inside text-sm text-gray-500 space-y-1">
+                {sources.slice(0, 3).map((source, index) => (
+                    <li key={index} className="truncate">
+                        <a href={source.uri} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700 hover:underline">
+                            {source.title || source.uri}
+                        </a>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+};
+
+
+// --- MAIN APPLICATION COMPONENT ---
+
+export default function App() {
+    const [symptoms, setSymptoms] = useState('');
+    const [diagnosisResult, setDiagnosisResult] = useState(null);
+    const [sources, setSources] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [userId, setUserId] = useState(null);
+    const [isAuthReady, setIsAuthReady] = useState(false);
+
+    // 1. Firebase Authentication Setup (Mandatory)
+    useEffect(() => {
+        if (!auth) {
+            setIsAuthReady(true);
+            setUserId('unauthenticated-user');
+            return;
+        }
+
+        const setupAuth = async () => {
+            try {
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (err) {
+                console.error("Firebase Sign-In Error:", err);
+            }
+        };
+
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            if (user) {
+                setUserId(user.uid);
+                console.log("Authenticated User ID:", user.uid);
+            } else {
+                setUserId(crypto.randomUUID()); // Fallback to random ID
+            }
+            setIsAuthReady(true);
+        });
+
+        setupAuth();
+        return () => unsubscribe();
+    }, []);
+
+    // 2. Gemini API Call with Exponential Backoff
+    const getDiagnosis = useCallback(async () => {
+        if (!symptoms.trim()) {
+            setError("Please describe the plant symptoms to get a diagnosis.");
+            return;
+        }
+
+        setIsLoading(true);
+        setError('');
+        setDiagnosisResult(null);
+        setSources([]);
+
+        const maxRetries = 3;
+        const baseDelay = 1000; // 1 second
+
+        const systemPrompt = `You are an AI Plant Pathologist and Agricultural Advisor. Your task is to provide a grounded diagnosis and treatment plan for crop diseases or deficiencies based on user-provided symptoms. Your response MUST be a single JSON object structured exactly according to the provided schema. Use Google Search grounding to ensure advice is current, reliable, and factually based on real-world agricultural knowledge. 
+        
+        Guidelines for Sections:
+        1. Diagnosis: Provide the most likely issue (e.g., 'Early Blight (Fungus)' or 'Nitrogen Deficiency') and its urgency (Low, Medium, High).
+        2. Treatment Plan: Provide actionable, step-by-step resolution.
+        3. Educational Content: Provide a simple, direct script (1-3 paragraphs) suitable for a voice assistant or simple video, focusing on the core problem and solution for users with low literacy.
+        4. Safety & Prevention: Long-term tips for crop health and preventing recurrence.`;
+
+        const payload = {
+            contents: [{ parts: [{ text: symptoms }] }],
+            tools: [{ "google_search": {} }],
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: DIAGNOSIS_SCHEMA,
+            }
+        };
+
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    if (response.status === 429 && attempt < maxRetries - 1) {
+                        const delay = baseDelay * (2 ** attempt);
+                        console.log(`Rate limit exceeded. Retrying in ${delay}ms...`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        continue;
+                    }
+                    throw new Error(`API request failed with status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                const candidate = result.candidates?.[0];
+
+                if (!candidate || !candidate.content?.parts?.[0]?.text) {
+                    throw new Error("Received an empty or malformed response from the AI.");
+                }
+
+                // 1. Extract JSON text and parse
+                const jsonText = candidate.content.parts[0].text;
+                const parsedDiagnosis = JSON.parse(jsonText);
+                setDiagnosisResult(parsedDiagnosis);
+
+                // 2. Extract grounding sources
+                let extractedSources = [];
+                const groundingMetadata = candidate.groundingMetadata;
+                if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                    extractedSources = groundingMetadata.groundingAttributions
+                        .map(attribution => ({
+                            uri: attribution.web?.uri,
+                            title: attribution.web?.title,
+                        }))
+                        .filter(source => source.uri && source.title);
+                }
+                setSources(extractedSources);
+                break; // Success, exit retry loop
+
+            } catch (err) {
+                console.error("Diagnosis attempt failed:", err);
+                if (attempt === maxRetries - 1) {
+                    setError(`Failed to get a diagnosis after ${maxRetries} attempts. Please try again or simplify your description.`);
+                }
+                // Continue to the next attempt after the catch block
+            }
+        }
+
+        setIsLoading(false);
+    }, [symptoms]);
+
+    // Color mapping for visual appeal and urgency
+    const getColorClass = (title) => {
+        switch (title) {
+            case 'Diagnosis': return 'border-red-500';
+            case 'TreatmentPlan': return 'border-green-500';
+            case 'EducationalContent': return 'border-blue-500';
+            case 'SafetyAndPrevention': return 'border-yellow-500';
+            default: return 'border-gray-500';
+        }
+    };
+
+    const isInputDisabled = isLoading || !isAuthReady;
+    const buttonText = isLoading ? 'Analyzing...' : 'Get Diagnosis';
+
+    const userIdDisplay = useMemo(() => {
+        if (!userId) return "Loading...";
+        return `User ID: ${userId}`;
+    }, [userId]);
+
+
+    return (
+        <div className="min-h-screen bg-gray-100 p-4 sm:p-8 font-['Inter']">
+            <script src="https://cdn.tailwindcss.com"></script>
+            <style>
+                {`
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+                body { font-family: 'Inter', sans-serif; }
+                .grid-sections {
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                }
+                `}
+            </style>
+
+            <header className="bg-white shadow-xl rounded-xl p-6 mb-8">
+                <h1 className="text-3xl font-bold text-gray-800 flex items-center">
+                    <span role="img" aria-label="leaf" className="mr-3 text-4xl">🌱</span>
+                    AI Crop Health Advisor
+                </h1>
+                <p className="text-gray-600 mt-2">
+                    Describe your plant's symptoms below to receive an instant, grounded diagnosis and treatment plan.
+                </p>
+                <p className="text-xs text-gray-400 mt-2">{userIdDisplay} (Auth Status: {isAuthReady ? 'Ready' : 'Pending'})</p>
+            </header>
+
+            <main className="max-w-7xl mx-auto">
+                <div className="bg-white p-6 rounded-xl shadow-xl mb-8">
+                    <label htmlFor="symptoms" className="block text-lg font-semibold text-gray-700 mb-2">
+                        Describe Symptoms (Simulated Vision/Voice Input):
+                    </label>
+                    <textarea
+                        id="symptoms"
+                        value={symptoms}
+                        onChange={(e) => setSymptoms(e.target.value)}
+                        rows="4"
+                        placeholder="E.g., The tomato plant leaves are yellowing, starting from the lower leaves and moving up. I also see small black spots with yellow halos on the leaves."
+                        className="w-full p-4 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500 transition duration-150 ease-in-out resize-none"
+                        disabled={isInputDisabled}
+                    ></textarea>
+
+                    {error && (
+                        <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+                            {error}
+                        </div>
+                    )}
+
+                    <button
+                        onClick={getDiagnosis}
+                        disabled={isInputDisabled}
+                        className={`mt-4 w-full sm:w-auto px-8 py-3 rounded-full font-bold text-white transition-transform duration-200 ease-out shadow-lg 
+                            ${isInputDisabled
+                                ? 'bg-green-400 cursor-not-allowed'
+                                : 'bg-green-600 hover:bg-green-700 transform hover:scale-105 active:scale-95'
+                            }`}
+                    >
+                        {buttonText}
+                    </button>
+                </div>
+
+                {isLoading && <LoadingSpinner />}
+
+                {diagnosisResult && (
+                    <div className="bg-white rounded-xl shadow-2xl overflow-hidden mt-8">
+                        <div className="p-6 bg-green-50">
+                            <h2 className="text-2xl font-bold text-green-800">🔬 Diagnosis Report</h2>
+                            <p className="text-green-600 mt-1">Grounded analysis based on real-time web search.</p>
+                        </div>
+
+                        <div className="p-6 grid grid-sections gap-6">
+                            {Object.entries(diagnosisResult).map(([key, value]) => (
+                                <SectionCard
+                                    key={key}
+                                    title={key.replace(/([A-Z])/g, ' $1').trim()} // Format camelCase to Title Case
+                                    content={value}
+                                    colorClass={getColorClass(key)}
+                                />
+                            ))}
+                        </div>
+                        <GroundingSources sources={sources} />
+                    </div>
+                )}
+
+                {!diagnosisResult && !isLoading && (
+                    <div className="mt-8 p-6 bg-blue-100 border border-blue-400 text-blue-800 rounded-xl shadow-md">
+                        <h3 className="font-semibold text-lg mb-2">How it Works:</h3>
+                        <p>This advisor acts as an AI Plant Doctor. It uses your description to search the latest agricultural data (via Google Search grounding) and provides a structured, actionable report suitable for both technical experts and voice/video assistants.</p>
+                    </div>
+                )}
+            </main>
+        </div>
+    );
+}
