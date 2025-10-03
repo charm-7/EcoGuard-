@@ -2,7 +2,7 @@
 User Input (Simulated Symptom Analysis):
 "The tomato plant leaves are yellowing, starting from the lower leaves and moving up. I also notice a V-shaped yellow area at the edge of the older leaves, and the veins inside the yellowed area remain green. The fruit production has slowed down."
 
-1. Diagnosis: Likely Issue & Urgency
+*1. Diagnosis* : Likely Issue & Urgency
 The symptoms described—interveinal chlorosis (yellowing between the veins) starting on the older, lower leaves, with the veins remaining distinctly green—are highly characteristic of a Potassium Deficiency (K) in the tomato plant. The severity is Moderate, as the deficiency is already affecting older growth and slowing fruit production.
 
 Urgency: Medium. While not an immediate threat to the plant's life like a fast-moving fungal disease, a persistent Potassium deficiency will significantly reduce fruit size, flavor, and overall yield, and it compromises the plant's ability to resist disease and stress. Immediate corrective action is necessary to save the current harvest.
