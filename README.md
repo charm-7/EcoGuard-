@@ -2,12 +2,16 @@
 User Input (Simulated Symptom Analysis):
 "The tomato plant leaves are yellowing, starting from the lower leaves and moving up. I also notice a V-shaped yellow area at the edge of the older leaves, and the veins inside the yellowed area remain green. The fruit production has slowed down."
 
-*1. Diagnosis* : Likely Issue & Urgency
+*1. Diagnosis* :
+ Likely Issue & Urgency
 The symptoms described—interveinal chlorosis (yellowing between the veins) starting on the older, lower leaves, with the veins remaining distinctly green—are highly characteristic of a Potassium Deficiency (K) in the tomato plant. The severity is Moderate, as the deficiency is already affecting older growth and slowing fruit production.
 
-Urgency: Medium. While not an immediate threat to the plant's life like a fast-moving fungal disease, a persistent Potassium deficiency will significantly reduce fruit size, flavor, and overall yield, and it compromises the plant's ability to resist disease and stress. Immediate corrective action is necessary to save the current harvest.
+Urgency: 
+Medium. While not an immediate threat to the plant's life like a fast-moving fungal disease, a persistent Potassium deficiency will significantly reduce fruit size, flavor, and overall yield, and it compromises the plant's ability to resist disease and stress. Immediate corrective action is necessary to save the current harvest.
 
-2. Treatment Plan: Step-by-Step Resolution
+2. Treatment Plan: 
+Step-by-Step Resolution
+
 A. Immediate Action (Within 24 Hours):
 
 Foliar Feed: Apply a liquid fertilizer high in Potassium (a 'bloom' or 'fruit-set' formula, e.g., NPK ratio of 10-20-30 or similar) as a foliar spray directly to the leaves. This provides a quick, temporary fix as the plant can absorb the nutrient directly.
@@ -18,25 +22,26 @@ Soil Test (Recommended): If possible, test your soil's pH and nutrient levels. P
 
 Apply Potassium Source: Amend the soil around the plant with a slow-release source of Potassium. Good options include:
 
-Sulfate of Potash (Potassium Sulfate, K 
-2
+Sulfate of Potash (Potassium Sulfate, K2SO4): 
 
- SO 
-4
+A fast-acting, excellent choice for vegetable gardens. Apply according to package directions.
 
- ): A fast-acting, excellent choice for vegetable gardens. Apply according to package directions.
+Wood Ash: 
+If you have a clean source (no treated wood), wood ash is rich in K, but it will also raise the soil pH, so use sparingly if your soil is already alkaline.
 
-Wood Ash: If you have a clean source (no treated wood), wood ash is rich in K, but it will also raise the soil pH, so use sparingly if your soil is already alkaline.
-
-Watering Check: Ensure your soil is not waterlogged, as excessive moisture can hinder nutrient uptake.
+Watering Check: 
+Ensure your soil is not waterlogged, as excessive moisture can hinder nutrient uptake.
 
 C. Monitoring:
 
-New Growth Check: Monitor the new growth at the top of the plant. Since Potassium is mobile, the plant will move it from old leaves to new ones. New leaves should emerge green and healthy within 1-2 weeks of treatment.
+New Growth Check: 
+Monitor the new growth at the top of the plant. Since Potassium is mobile, the plant will move it from old leaves to new ones. New leaves should emerge green and healthy within 1-2 weeks of treatment.
 
 Note: The already-damaged old leaves will likely not recover their green color but will continue to support the plant until they naturally die off.
 
-3. Educational Content: Simple Scripts for Voice/Video
+3. Educational Content: 
+Simple Scripts for Voice/Video
+
 (This content is designed to be simple and direct for AI conversion into an educational video or voice prompt for users with low literacy.)
 
 Title: "Why Your Tomato Leaves Are Getting Yellow" 🍅
